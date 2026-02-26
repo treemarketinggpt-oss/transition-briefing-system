@@ -6,7 +6,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-dotenv.config({ override: false });
+dotenv.config();
 
 // Ensure uploads directory exists
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -16,18 +16,21 @@ if (!fs.existsSync(uploadDir)) {
 
 // Configure Multer
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
 });
-const upload = multer({ storage });
+const upload = multer({ storage: storage });
 
 async function startServer() {
   const app = express();
-
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // API route
+  // API route for submitting the brief
   app.post("/api/submit-brief", upload.array("files"), async (req: any, res) => {
     console.log(">>> Received submission attempt...");
 
@@ -43,26 +46,11 @@ async function startServer() {
 
       console.log("Processing brief for:", formData["الاسم"] || "Unknown Client");
 
-      // ===== ENV =====
       const recipient = process.env.NOTIFICATION_EMAIL || "Transitionksa@gmail.com";
       const emailUser = process.env.EMAIL_USER;
       const emailPass = process.env.EMAIL_PASS;
 
-      console.log("ENV CHECK:", {
-        EMAIL_USER: !!emailUser,
-        EMAIL_PASS: !!emailPass,
-        NOTIFICATION_EMAIL: !!recipient,
-        NODE_ENV: process.env.NODE_ENV,
-      });
-
-      if (!emailUser || !emailPass) {
-        return res.status(500).json({
-          error: "Email configuration missing",
-          details: "EMAIL_USER or EMAIL_PASS is missing on Railway Variables.",
-        });
-      }
-
-      // Map keys
+      // Map specific long keys to shorter more readable labels for the table (like the screenshot)
       const labelMap: any = {
         "الاسم": "الاسم",
         "هل تمتلك صفحة للمؤسسة وحساب انستجرام قائم بالفعل؟": "امتلاك صفحة",
@@ -85,12 +73,13 @@ async function startServer() {
         "أرقام وعناوين المؤسسة": "بيانات التواصل",
         "ما هو حجم المحتوي الذي تفضله؟": "حجم المحتوى",
         "هل تمتلك لوجو؟ هل تريد تجديده وعمل لوجو جديد؟ هل تمتلك سورس اللوجو القديم؟": "تفاصيل اللوجو",
-        "ماهي الالوان المحببة لك بحيث تكون ألوان ال Branding الرئيسية على الصفحة؟": "الألوان المحببة",
+        "ماهي الالوان المحببة لك بحيث تكون ألوان ال Branding الرئيسية على الصفحة؟": "الألوان المحببة"
       };
 
+      // Format the form data into an HTML table styled like the screenshot
       const tableRows = Object.entries(formData)
         .map(([question, answer], index) => {
-          let displayedAnswer: any = answer || "N/A";
+          let displayedAnswer = answer || "N/A";
           if (Array.isArray(answer)) displayedAnswer = answer.join(", ");
 
           const label = labelMap[question] || question;
@@ -111,7 +100,7 @@ async function startServer() {
         })
         .join("");
 
-      const attachments = (files || []).map((file: any) => ({
+      const attachments = files.map((file: any) => ({
         filename: file.originalname,
         path: file.path,
       }));
@@ -120,7 +109,7 @@ async function startServer() {
         from: emailUser,
         to: recipient,
         subject: `New Brief Submission - ${formData["الاسم"] || "Client"}`,
-        attachments,
+        attachments: attachments,
         html: `
           <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 900px; margin: 20px auto; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #a22675; padding: 0; display: table; width: 100%; border-collapse: collapse;">
@@ -133,7 +122,9 @@ async function startServer() {
               </div>
             </div>
             <table style="width: 100%; border-collapse: collapse;">
-              <tbody>${tableRows}</tbody>
+              <tbody>
+                ${tableRows}
+              </tbody>
             </table>
             <div style="padding: 20px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
               <p style="margin: 0; color: #64748b; font-size: 14px;">Drive Link: <a href="${driveLink}" style="color: #a22675; font-weight: bold; text-decoration: none;">Link to Folder</a></p>
@@ -142,48 +133,25 @@ async function startServer() {
         `,
       };
 
-      // ===== SMTP (explicit) =====
-      const transporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-        // helpful on some hosted envs:
-        connectionTimeout: 20_000,
-        greetingTimeout: 20_000,
-        socketTimeout: 20_000,
-      });
+      if (emailUser && emailPass) {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: emailUser, pass: emailPass },
+        });
 
-      // Verify connection to get clear error
-      await transporter.verify();
-      console.log("SMTP verified ✅");
+        await transporter.sendMail(mailOptions);
+        console.log("Email sent successfully!");
 
-      await transporter.sendMail(mailOptions);
-      console.log("Email sent successfully ✅");
+        // Cleanup files
+        files.forEach((file: any) => fs.unlink(file.path, () => { }));
 
-      // Cleanup files
-      (files || []).forEach((file: any) => fs.unlink(file.path, () => { }));
-
-      return res.json({ success: true, message: "Sent successfully" });
+        return res.json({ success: true, message: "Sent successfully" });
+      } else {
+        return res.status(500).json({ error: "Email configuration missing" });
+      }
     } catch (error: any) {
-      console.error("FATAL ERROR during submission:", {
-        message: error?.message,
-        code: error?.code,
-        command: error?.command,
-        response: error?.response,
-        responseCode: error?.responseCode,
-        stack: error?.stack,
-      });
-
-      return res.status(500).json({
-        error: "Server returned error. Please check your Gmail App Password setup.",
-        details: error?.message || String(error),
-        code: error?.code,
-        response: error?.response,
-      });
+      console.error("FATAL ERROR during submission:", error.message);
+      res.status(500).json({ error: "Failed to process brief", details: error.message });
     }
   });
 
