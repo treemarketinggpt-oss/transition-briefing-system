@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-purple: #A22675;
+  --color-brand-orange: #F29026;
+  --background-image-brand-gradient: linear-gradient(135deg, #A22675 0%, #F29026 100%);
+}
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 antialiased selection:bg-brand-purple/10 selection:text-brand-purple;
+    overflow-x: hidden;
+    font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@keyframes rainbow-slide {
+  from {
+    right: -25vw;
+  }
+
+  to {
+    right: 125vw;
+  }
+}
+
+.rainbow-beam {
+  height: 100vh;
+  width: 0;
+  top: 0;
+  position: absolute;
+  transform: rotate(10deg);
+  transform-origin: top right;
+  animation: rainbow-slide linear infinite;
+  opacity: 0.15;
+}
+
+.glass-card {
+  @apply bg-white/60 backdrop-blur-2xl border border-white/50 rounded-[2.5rem] shadow-2xl shadow-slate-200/40;
+}
+
+.focus-ring {
+  @apply focus:ring-4 focus:ring-brand-purple/5 focus:border-brand-purple/30 transition-all;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300/40 rounded-full hover:bg-slate-400/40 transition-colors;
+}
+
+[dir="rtl"] {
+  font-family: 'Inter', 'Outfit', system-ui, -apple-system, sans-serif;
+}
