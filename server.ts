@@ -109,8 +109,13 @@ async function startServer() {
       }));
 
       const transporter = nodemailer.createTransport({
-        service: "gmail",
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
         auth: { user: emailUser, pass: emailPass },
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
       });
 
       console.log(">>> [API] Attempting to send email via Gmail...");
