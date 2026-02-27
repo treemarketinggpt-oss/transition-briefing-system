@@ -73,9 +73,12 @@ async function startServer() {
           rejectUnauthorized: false,
           minVersion: "TLSv1.2"
         },
-        connectionTimeout: 20000, // 20 seconds
+        connectionTimeout: 20000,
         greetingTimeout: 20000,
-        socketTimeout: 20000
+        socketTimeout: 20000,
+        // Force IPv4 because Railway sometimes fails on IPv6 connections (ENETUNREACH)
+        // @ts-ignore
+        family: 4
       });
 
       // Verify connection immediately
