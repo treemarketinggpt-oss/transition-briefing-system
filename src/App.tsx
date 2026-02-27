@@ -408,7 +408,8 @@ const ClientForm = () => {
         setShowModal(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        alert("Server returned error. Please check your Gmail App Password setup.");
+        const errData = await response.json().catch(() => ({}));
+        alert(`Server Error: ${errData.message || "Please check your Gmail App Password setup."}`);
       }
     } catch (error) {
       console.error(error);
