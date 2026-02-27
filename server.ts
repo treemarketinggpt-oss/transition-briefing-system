@@ -10,7 +10,6 @@ import fs from "fs";
 dotenv.config();
 
 // FORCE IPv4 globally to fix Railway's ENETUNREACH issue
-// This tells Node to prefer IPv4 when looking up smtp.gmail.com
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder("ipv4first");
 }
@@ -46,40 +45,32 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true }));
 
   app.post("/api/submit-brief", upload.array("files"), async (req: any, res) => {
-    console.log(">>> [LOG] API Submission Start...");
+    console.log(">>> [LOG] Starting Submission for:", req.body?.formData ? "Data Received" : "NO DATA");
 
     try {
       if (!req.body || !req.body.formData) {
-        return res.status(400).json({ message: "No data received. Please refresh and try again." });
+        return res.status(400).json({ message: "Form data is empty. Please try again." });
       }
 
       const formData = JSON.parse(req.body.formData);
-      const driveLink = req.body.driveLink || "Not Provided";
-      const files = req.files || [];
-
       const emailUser = process.env.EMAIL_USER;
       const emailPass = process.env.EMAIL_PASS;
       const recipient = process.env.NOTIFICATION_EMAIL || "Transitionksa@gmail.com";
 
       if (!emailUser || !emailPass) {
-        return res.status(500).json({ message: "Server configuration error: Missing email credentials." });
+        return res.status(500).json({ message: "Server missing Email Credentials." });
       }
 
-      console.log(`>>> [LOG] Sending email from ${emailUser}...`);
-
-      // Using Port 465 + IPv4 Force + Trimming
+      // Nodemailer "service" mode is often more robust on cloud providers
       const transporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
+        service: "gmail",
         auth: {
           user: emailUser.trim(),
           pass: emailPass.trim()
         },
-        // Force IPv4 to bypass ENETUNREACH IPv6 errors on Railway
-        // @ts-ignore
-        family: 4
-      } as any);
+        logger: true, // Show detailed logs in Railway
+        debug: true   // Show SMTP conversation
+      });
 
       // Map labels
       const labelMap: any = {
@@ -121,29 +112,29 @@ async function startServer() {
         }).join("");
 
       await transporter.sendMail({
-        from: `Transition Brief <${emailUser}>`,
+        from: `"Transition Brief Form" <${emailUser}>`,
         to: recipient,
-        subject: `New Brief - ${formData["الاسم"] || "Client"}`,
-        attachments: files.map((file: any) => ({ filename: file.originalname, path: file.path })),
+        subject: `New Brief Submission - ${formData["الاسم"] || "Client"}`,
+        attachments: (req.files as any[] || []).map(file => ({ filename: file.originalname, path: file.path })),
         html: `
           <div dir="rtl" style="font-family:sans-serif;max-width:850px;margin:10px auto;border:1px solid #e2e8f0;">
-            <div style="background:#a22675;color:white;padding:15px;text-align:center;font-size:18px;">
-              Transition Brief Form Submission
+            <div style="background:#a22675;color:white;padding:20px;text-align:center;font-size:20px;font-weight:bold;">
+               Transition Brief Form
             </div>
             <table style="width:100%;border-collapse:collapse;"><tbody>${tableRows}</tbody></table>
-            <div style="padding:15px;background:#f8fafc;text-align:center;">
-              <p>Drive Link: <a href="${driveLink}" style="color:#a22675;">Click here to view folder</a></p>
+            <div style="padding:15px;background:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+              <p>Google Drive: <a href="${req.body.driveLink || '#'}" style="color:#a22675;font-weight:bold;">Folder Link</a></p>
             </div>
           </div>`,
       });
 
-      console.log(">>> [LOG] Email Sent Successfully!");
-      files.forEach((file: any) => fs.unlink(file.path, () => { }));
+      console.log(">>> [SUCCESS] Email Sent!");
+      (req.files as any[] || []).forEach(file => fs.unlink(file.path, () => { }));
       return res.json({ success: true });
 
     } catch (error: any) {
-      console.error(">>> [FATAL ERROR]:", error.message);
-      res.status(500).json({ message: `Gmail Error: ${error.message}. Please Check your App Password.` });
+      console.error(">>> [ERROR] Submission failed:", error.message);
+      res.status(500).json({ message: error.message || "Unknown Server Error during email send." });
     }
   });
 
