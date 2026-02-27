@@ -3,10 +3,17 @@ import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import multer from "multer";
+import dns from "dns";
 import path from "path";
 import fs from "fs";
 
 dotenv.config();
+
+// FORCE IPv4 globally to fix Railway's ENETUNREACH issue
+// This tells Node to prefer IPv4 when looking up smtp.gmail.com
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 // Ensure uploads directory exists
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -60,22 +67,19 @@ async function startServer() {
 
       console.log(`>>> [LOG] Sending email from ${emailUser}...`);
 
-      // Using the most stable SMTP configuration for cloud providers
+      // Using Port 465 + IPv4 Force + Trimming
       const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
         port: 465,
-        secure: true, // Use SSL/TLS
+        secure: true,
         auth: {
           user: emailUser.trim(),
           pass: emailPass.trim()
         },
-        // IMPORTANT: Force IPv4 to bypass ENETUNREACH IPv6 errors on Railway
+        // Force IPv4 to bypass ENETUNREACH IPv6 errors on Railway
         // @ts-ignore
-        family: 4,
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 15000
-      });
+        family: 4
+      } as any);
 
       // Map labels
       const labelMap: any = {
