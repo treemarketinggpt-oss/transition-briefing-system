@@ -55,42 +55,27 @@ async function startServer() {
       const recipient = process.env.NOTIFICATION_EMAIL || "Transitionksa@gmail.com";
 
       if (!emailUser || !emailPass) {
-        console.error(">>> [ERROR] EMAIL_USER or EMAIL_PASS missing in environment.");
         return res.status(500).json({ message: "Server configuration error: Missing email credentials." });
       }
 
-      console.log(`>>> [LOG] Sending email from ${emailUser} to ${recipient}...`);
+      console.log(`>>> [LOG] Sending email from ${emailUser}...`);
 
+      // Using the most stable SMTP configuration for cloud providers
       const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
-        port: 587,
-        secure: false, // Use STARTTLS
+        port: 465,
+        secure: true, // Use SSL/TLS
         auth: {
           user: emailUser.trim(),
           pass: emailPass.trim()
         },
-        tls: {
-          rejectUnauthorized: false,
-          minVersion: "TLSv1.2"
-        },
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 20000,
-        // Force IPv4 because Railway sometimes fails on IPv6 connections (ENETUNREACH)
+        // IMPORTANT: Force IPv4 to bypass ENETUNREACH IPv6 errors on Railway
         // @ts-ignore
-        family: 4
+        family: 4,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000
       });
-
-      // Verify connection immediately
-      try {
-        await transporter.verify();
-        console.log(">>> [LOG] SMTP Connection Verified.");
-      } catch (verifyError: any) {
-        console.error(">>> [ERROR] SMTP Verification failed:", verifyError.message);
-        return res.status(500).json({
-          message: `Gmail Login Failed: ${verifyError.message}. Please double-check your App Password.`
-        });
-      }
 
       // Map labels
       const labelMap: any = {
@@ -154,7 +139,7 @@ async function startServer() {
 
     } catch (error: any) {
       console.error(">>> [FATAL ERROR]:", error.message);
-      res.status(500).json({ message: error.message || "An unexpected error occurred on the server." });
+      res.status(500).json({ message: `Gmail Error: ${error.message}. Please Check your App Password.` });
     }
   });
 
